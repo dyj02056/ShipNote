@@ -8,9 +8,9 @@
   --seal: #26357a;
   --alert: #b8431f;
   --sans: 'Pretendard Variable', Pretendard, system-ui, sans-serif;
-  --serif: 'Newsreader', 'Pretendard Variable', Georgia, serif;
-  --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
-  --head: 'Archivo', 'Pretendard Variable', sans-serif;
+  --serif: 'Newsreader Variable', 'Pretendard Variable', Georgia, serif;
+  --mono: 'JetBrains Mono Variable', ui-monospace, Consolas, monospace;
+  --head: 'Archivo Variable', 'Pretendard Variable', sans-serif;
 }
 
 * { box-sizing: border-box; }
