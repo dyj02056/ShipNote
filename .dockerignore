@@ -4,3 +4,4 @@ out
 *.db
 .sample-repo
 .git
+dist
