@@ -81,7 +81,10 @@ Node 24 이상이 필요합니다.
 ### 설치해서 쓰기
 
 ```
-npm install -g github:dyj02056/ShipNote
+git clone https://github.com/dyj02056/ShipNote && cd ShipNote
+npm install
+npm pack                                          # dist/와 web/dist/를 빌드해 shipnote-0.2.0.tgz 생성
+npm install -g ./shipnote-0.2.0.tgz
 shipnote keygen
 shipnote release v1.0.0 --key shipnote.key
 shipnote verify out/shipnote-v1.0.0.zip --pubkey shipnote.pub

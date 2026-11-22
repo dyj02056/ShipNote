@@ -6,3 +6,4 @@ out
 out-docker
 *.key
 *.zip.tmp
+shipnote-*.tgz
