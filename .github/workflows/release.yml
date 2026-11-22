@@ -1,0 +1,32 @@
+name: release-docs
+
+# v로 시작하는 태그를 푸시하면 릴리스 문서를 만들어 GitHub Release에 올린다.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 직전 태그를 찾으려면 전체 이력이 필요하다
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm test
+      - name: 릴리스 문서 생성
+        run: node src/cli.ts release "$GITHUB_REF_NAME" --repo . --out out --db out/shipnote.db
+      - name: 패키지 재검증
+        run: node src/cli.ts verify "out/shipnote-$GITHUB_REF_NAME.zip"
+      - name: GitHub Release에 첨부
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" "out/shipnote-$GITHUB_REF_NAME.zip" --clobber

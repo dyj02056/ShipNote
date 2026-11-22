@@ -1,0 +1,30 @@
+{
+  "name": "shipnote",
+  "version": "0.1.0",
+  "description": "Git 이력에서 릴리스 노트·변경 보고서·전달 패키지를 만드는 CLI",
+  "type": "module",
+  "bin": { "shipnote": "src/cli.ts" },
+  "scripts": {
+    "shipnote": "node src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "sample": "node scripts/make-sample-repo.mjs",
+    "web:dev": "vite web",
+    "web:build": "vite build web"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "@types/react": "*",
+    "@types/react-dom": "*",
+    "@vitejs/plugin-react": "*",
+    "typescript": "*",
+    "vite": "*",
+    "vitest": "*"
+  }
+}

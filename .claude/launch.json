@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "shipnote",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["src/cli.ts", "serve", "--port", "4173"],
+      "port": 4173
+    }
+  ]
+}
