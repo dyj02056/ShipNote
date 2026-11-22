@@ -4,3 +4,5 @@ out
 *.db
 .sample-repo
 out-docker
+*.key
+*.zip.tmp

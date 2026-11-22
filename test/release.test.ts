@@ -9,6 +9,7 @@ import { runRelease } from '../src/release.ts';
 import { verifyZip } from '../src/verify.ts';
 import { getRelease, listReleases, openDb } from '../src/db.ts';
 import { startServer } from '../src/serve.ts';
+import { keygen } from '../src/sign.ts';
 
 let tmp: string;
 let repo: string;
@@ -67,6 +68,14 @@ describe('릴리스 파이프라인(샘플 저장소 100건 이상)', () => {
     await expect(runRelease({ tag: 'v0.2.0', repo, out, db, force: true })).resolves.toBeTruthy();
   }, 30_000);
 
+  it('--key로 서명하면 공개키 검증까지 통과한다', async () => {
+    const k = keygen(join(tmp, 'shipnote.key'));
+    const r = await runRelease({ tag: 'v0.2.0', repo, out, db, force: true, key: k.keyPath });
+    expect(r.keyId).toBe(k.keyId);
+    const v = verifyZip(readFileSync(r.zipPath), { pubkey: readFileSync(k.pubPath, 'utf8'), sha256: r.zipSha });
+    expect(v).toMatchObject({ ok: true, signature: 'valid' });
+  }, 30_000);
+
   it('없는 태그와 잘못된 태그 이름을 거부한다', async () => {
     await expect(runRelease({ tag: 'v9', repo, out, db })).rejects.toThrow('태그가 없습니다');
     await expect(runRelease({ tag: '--output=x', repo, out, db })).rejects.toThrow('올바르지 않습니다');
@@ -104,6 +113,17 @@ describe('API 서버', () => {
     writeFileSync(zipPath, Buffer.concat([bytes, Buffer.from('x')]));
     const v = (await (await fetch(`${base}/api/releases/v0.1.0/verify`)).json()) as { ok: boolean };
     expect(v.ok).toBe(false);
+  });
+
+  it('공개키를 주고 띄우면 서명까지 확인한다', async () => {
+    const s2 = await startServer({ db, port: 0, web: join(tmp, 'web', 'dist'), pubkey: readFileSync(join(tmp, 'shipnote.pub'), 'utf8') });
+    const b2 = `http://127.0.0.1:${(s2.address() as { port: number }).port}`;
+    try {
+      const v = (await (await fetch(`${b2}/api/releases/v0.2.0/verify`)).json()) as { ok: boolean; signature: string };
+      expect(v).toMatchObject({ ok: true, signature: 'valid' });
+    } finally {
+      s2.close();
+    }
   });
 
   it('웹 루트 밖 경로를 막는다', async () => {

@@ -21,7 +21,7 @@ export function isInside(root: string, file: string): boolean {
 }
 
 // API 3개와 빌드된 웹 화면(web/dist)만 서빙한다.
-export function startServer(opts: { db: string; port: number; web: string; host?: string }): Promise<Server> {
+export function startServer(opts: { db: string; port: number; web: string; host?: string; pubkey?: string }): Promise<Server> {
   const db = openDb(opts.db);
   const webRoot = resolve(opts.web);
 
@@ -55,10 +55,17 @@ export function startServer(opts: { db: string; port: number; web: string; host?
         }
         // zip을 다시 읽어 매니페스트와 DB의 zip 해시를 함께 확인한다.
         if (!existsSync(found.release.zip_path)) {
-          return json(200, { ok: false, tag: m[1], checked: 0, problems: ['zip 파일을 찾을 수 없습니다'] });
+          return json(200, {
+            ok: false,
+            tag: m[1],
+            checked: 0,
+            signature: opts.pubkey ? 'missing' : 'unchecked',
+            problems: ['zip 파일을 찾을 수 없습니다'],
+            warnings: [],
+          });
         }
         const zip = readFileSync(found.release.zip_path);
-        const result = verifyZip(zip);
+        const result = verifyZip(zip, { pubkey: opts.pubkey });
         if (sha256(zip) !== found.release.zip_sha256) {
           result.ok = false;
           result.problems.push('zip 전체 해시가 기록과 다릅니다');
