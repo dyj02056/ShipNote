@@ -17,9 +17,16 @@ export function parseLog(raw: string): Commit[] {
 }
 
 // 태그 이름은 git 옵션으로 오해되지 않게 엄격히 검사한다.
+// 영문·숫자로 시작하고, release/1.0처럼 '/'로 나눈 이름을 허용한다.
+// '..', '//', '/.', 끝의 '/'·'.'·'.lock'은 git도 거부하는 형태라 미리 막는다.
+const TAG_RE = /^[A-Za-z0-9][\w.+/-]*$/;
+const TAG_BAD = /\.\.|\/\/|\/\.|\/$|\.$|\.lock$/;
 export function assertTag(tag: string): void {
-  if (!/^[A-Za-z0-9][\w.+-]*$/.test(tag)) throw new Error(`태그 이름이 올바르지 않습니다: ${tag}`);
+  if (!TAG_RE.test(tag) || TAG_BAD.test(tag)) throw new Error(`태그 이름이 올바르지 않습니다: ${tag}`);
 }
+
+// 파일 이름에는 '/'를 쓸 수 없으므로 태그에 쓰이지 않는 '~'로 바꾼다.
+export const fileSafeTag = (tag: string) => tag.replaceAll('/', '~');
 
 function git(repo: string, args: string[]): string {
   // stderr는 가려서 '태그 없음' 같은 예상된 실패가 화면에 새지 않게 한다.

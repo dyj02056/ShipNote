@@ -89,7 +89,7 @@ async function main(): Promise<number> {
     const rows = listReleases(db);
     db.close();
     if (!rows.length) console.log('아직 릴리스가 없습니다. shipnote release <태그>를 실행하세요.');
-    for (const r of rows) console.log(`${r.tag}\t${r.created_at.slice(0, 10)}\t커밋 ${r.change_count}건`);
+    for (const r of rows) console.log(`${r.tag}\t${r.tag_date.slice(0, 10)}\t커밋 ${r.change_count}건${r.key_id ? `\t서명 ${r.key_id}` : ''}`);
     return 0;
   }
   if (cmd === 'serve') {

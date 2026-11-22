@@ -76,6 +76,21 @@ describe('릴리스 파이프라인(샘플 저장소 100건 이상)', () => {
     expect(v).toMatchObject({ ok: true, signature: 'valid' });
   }, 30_000);
 
+  it('/가 들어간 태그도 릴리스하고 파일 이름은 ~로 바꾼다', async () => {
+    execFileSync('git', ['-C', repo, 'tag', 'release/2.0', 'v0.2.0']);
+    const r = await runRelease({ tag: 'release/2.0', repo, out, db, from: 'v0.1.0' });
+    expect(r.zipPath.endsWith('shipnote-release~2.0.zip')).toBe(true);
+    expect(verifyZip(readFileSync(r.zipPath)).ok).toBe(true);
+  }, 30_000);
+
+  it('태그 날짜와 생성 시각을 따로 기록한다', () => {
+    const d = openDb(db);
+    const r = getRelease(d, 'v0.1.0')!.release;
+    d.close();
+    expect(r.tag_date).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(Date.parse(r.created_at)).toBeGreaterThan(Date.now() - 10 * 60_000);
+  });
+
   it('없는 태그와 잘못된 태그 이름을 거부한다', async () => {
     await expect(runRelease({ tag: 'v9', repo, out, db })).rejects.toThrow('태그가 없습니다');
     await expect(runRelease({ tag: '--output=x', repo, out, db })).rejects.toThrow('올바르지 않습니다');
@@ -98,11 +113,21 @@ describe('API 서버', () => {
 
   it('목록·상세·검증을 돌려준다', async () => {
     const list = (await (await fetch(`${base}/api/releases`)).json()) as { tag: string }[];
-    expect(list.map((r) => r.tag).sort()).toEqual(['v0.1.0', 'v0.2.0']);
+    expect(list.map((r) => r.tag).sort()).toEqual(['release/2.0', 'v0.1.0', 'v0.2.0']);
     expect((await fetch(`${base}/api/releases/v0.2.0`)).status).toBe(200);
     const v = (await (await fetch(`${base}/api/releases/v0.2.0/verify`)).json()) as { ok: boolean };
     expect(v.ok).toBe(true);
     expect((await fetch(`${base}/api/releases/nope`)).status).toBe(404);
+  });
+
+  it('/가 들어간 태그는 %2F로 조회·검증·다운로드한다', async () => {
+    const t = encodeURIComponent('release/2.0');
+    expect((await fetch(`${base}/api/releases/${t}`)).status).toBe(200);
+    expect(((await (await fetch(`${base}/api/releases/${t}/verify`)).json()) as { ok: boolean }).ok).toBe(true);
+    const z = await fetch(`${base}/api/releases/${t}/zip`);
+    expect(z.headers.get('content-disposition')).toContain('shipnote-release~2.0.zip');
+    expect(z.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(verifyZip(new Uint8Array(await z.arrayBuffer())).ok).toBe(true);
   });
 
   it('zip이 변조되면 verify API가 실패를 알린다', async () => {

@@ -1,16 +1,24 @@
-import { useEffect, useState } from 'react';
-import { LABEL } from '../../src/render.ts';
+import { useCallback, useEffect, useState } from 'react';
+import { HIGHLIGHT, LABEL } from '../../src/render.ts';
 
-type Row = { tag: string; prev_tag: string | null; created_at: string; change_count: number };
+type Row = { tag: string; prev_tag: string | null; tag_date: string; key_id: string | null; change_count: number };
 type Change = { type: string; scope: string; subject: string; hash: string; author: string; breaking: number };
 type Detail = {
   release: Row & { zip_sha256: string };
   changes: Change[];
   artifacts: { name: string; sha256: string; bytes: number }[];
 };
-type Verify = { ok: boolean; checked: number; problems: string[] };
+type Signature = 'valid' | 'invalid' | 'missing' | 'unchecked' | 'unsigned';
+type Verify = { ok: boolean; checked: number; signature?: Signature; keyId?: string; problems: string[] };
 
-const HIGHLIGHT = ['feat', 'fix', 'perf', 'refactor'];
+const SIGNATURE: Record<Signature, string> = {
+  valid: '서명 확인',
+  invalid: '서명 불일치',
+  missing: '서명 없음',
+  unchecked: '서명 미확인',
+  unsigned: '서명 없음',
+};
+
 const day = (iso: string) => iso.slice(0, 10);
 
 async function getJson<T>(url: string): Promise<T> {
@@ -57,7 +65,7 @@ export function App() {
                   onClick={() => select(r.tag)}
                 >
                   <span className="tagname">{r.tag}</span>
-                  <span className="tagmeta">{day(r.created_at)}</span>
+                  <span className="tagmeta">{day(r.tag_date)}</span>
                 </button>
               </li>
             ))}
@@ -83,17 +91,17 @@ function Sheet({ tag }: { tag: string }) {
   const [err, setErr] = useState('');
   const [v, setV] = useState<Verify | 'loading'>('loading');
 
-  const verify = () => {
+  const verify = useCallback(() => {
     setV('loading');
     getJson<Verify>(`/api/releases/${encodeURIComponent(tag)}/verify`).then(setV, (e: Error) =>
       setV({ ok: false, checked: 0, problems: [e.message] }),
     );
-  };
+  }, [tag]);
 
   useEffect(() => {
     getJson<Detail>(`/api/releases/${encodeURIComponent(tag)}`).then(setD, (e: Error) => setErr(e.message));
     verify();
-  }, [tag]);
+  }, [tag, verify]);
 
   if (err) return <p className="notice err">{err}</p>;
   if (!d) return <p className="notice">불러오는 중입니다.</p>;
@@ -113,7 +121,7 @@ function Sheet({ tag }: { tag: string }) {
       <header className="head">
         <h2>{d.release.tag}</h2>
         <p className="range">
-          {day(d.release.created_at)} · {d.release.prev_tag ? `${d.release.prev_tag}에서 이어서` : '첫 릴리스'} · 커밋{' '}
+          {day(d.release.tag_date)} · {d.release.prev_tag ? `${d.release.prev_tag}에서 이어서` : '첫 릴리스'} · 커밋{' '}
           {d.changes.length}건
         </p>
       </header>
@@ -194,7 +202,7 @@ function Stamp({ v, total }: { v: Verify | 'loading'; total: number }) {
       <span>
         검인 완료
         <small>
-          파일 {v.checked}/{total} 일치
+          파일 {v.checked}/{total} 일치{v.signature ? ` · ${SIGNATURE[v.signature]}` : ''}
         </small>
       </span>
     </div>

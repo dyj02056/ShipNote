@@ -1,6 +1,6 @@
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { assertTag, gitLog, prevTag, tagDate, tagExists } from './parse.ts';
+import { assertTag, fileSafeTag, gitLog, prevTag, tagDate, tagExists } from './parse.ts';
 import { classify } from './classify.ts';
 import { renderHtml, renderNotes, renderReport } from './render.ts';
 import { pack, sha256 } from './pack.ts';
@@ -48,11 +48,15 @@ export async function runRelease(o: ReleaseOpts) {
 
     // 임시 파일에 쓰고 DB 기록이 끝난 뒤에만 최종 이름으로 바꾼다.
     mkdirSync(o.out, { recursive: true });
-    const zipPath = resolve(join(o.out, `shipnote-${o.tag}.zip`));
+    const zipPath = resolve(join(o.out, `shipnote-${fileSafeTag(o.tag)}.zip`));
     const tmpPath = `${zipPath}.tmp`;
     writeFileSync(tmpPath, zip);
     try {
-      saveRelease(db, { tag: o.tag, prev, createdAt: info.date, zipPath, zipSha, changes, artifacts }, o.force);
+      saveRelease(
+        db,
+        { tag: o.tag, prev, tagDate: info.date, createdAt: new Date().toISOString(), zipPath, zipSha, keyId, changes, artifacts },
+        o.force,
+      );
       renameSync(tmpPath, zipPath);
     } catch (e) {
       rmSync(tmpPath, { force: true });

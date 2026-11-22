@@ -17,7 +17,8 @@ export const LABEL: Record<string, string> = {
   기타: '분류 안 됨',
 };
 const ORDER = Object.keys(LABEL);
-const HIGHLIGHT = ['feat', 'fix', 'perf', 'refactor'];
+// 릴리스 노트와 웹 화면이 눈에 띄게 보여주는 분류
+export const HIGHLIGHT = ['feat', 'fix', 'perf', 'refactor'];
 
 const short = (h: string) => h.slice(0, 7);
 const line = (c: Change) => `- ${c.scope ? `(${c.scope}) ` : ''}${c.subject} (${short(c.hash)})`;
