@@ -39,6 +39,10 @@ export type SaveInput = {
   artifacts: Artifact[];
 };
 
+export function releaseExists(db: DatabaseSync, tag: string): boolean {
+  return db.prepare('SELECT 1 FROM releases WHERE tag = ?').get(tag) !== undefined;
+}
+
 // 한 트랜잭션으로 저장한다. 같은 태그가 있으면 force일 때만 교체한다.
 export function saveRelease(db: DatabaseSync, r: SaveInput, force = false): void {
   const old = db.prepare('SELECT id FROM releases WHERE tag = ?').get(r.tag) as { id: number } | undefined;

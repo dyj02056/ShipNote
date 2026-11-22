@@ -1,10 +1,10 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { assertTag, gitLog, prevTag, tagDate, tagExists } from './parse.ts';
 import { classify } from './classify.ts';
 import { renderHtml, renderNotes, renderReport } from './render.ts';
 import { pack, sha256 } from './pack.ts';
-import { openDb, saveRelease } from './db.ts';
+import { openDb, releaseExists, saveRelease } from './db.ts';
 import { notify } from './notify.ts';
 
 export type ReleaseOpts = {
@@ -23,31 +23,38 @@ export async function runRelease(o: ReleaseOpts) {
   if (o.from) assertTag(o.from);
   if (!tagExists(o.repo, o.tag)) throw new Error(`태그가 없습니다: ${o.tag}`);
 
-  const prev = o.from ?? prevTag(o.repo, o.tag);
-  const changes = gitLog(o.repo, prev, o.tag).map(classify);
-  const info = { tag: o.tag, prev, date: tagDate(o.repo, o.tag), changes };
-
-  const { zip, artifacts } = pack(o.tag, {
-    'RELEASE_NOTES.md': renderNotes(info),
-    'CHANGE_REPORT.md': renderReport(info),
-    'CHANGE_REPORT.html': renderHtml(info),
-  });
-
-  mkdirSync(o.out, { recursive: true });
-  const zipPath = resolve(join(o.out, `shipnote-${o.tag}.zip`));
-  writeFileSync(zipPath, zip);
-
   const db = openDb(o.db);
   try {
-    saveRelease(
-      db,
-      { tag: o.tag, prev, createdAt: info.date, zipPath, zipSha: sha256(zip), changes, artifacts },
-      o.force,
-    );
+    // 기존 zip을 건드리기 전에 중복부터 확인한다.
+    if (!o.force && releaseExists(db, o.tag)) throw new Error(`이미 있는 릴리스입니다: ${o.tag} (--force로 교체)`);
+
+    const prev = o.from ?? prevTag(o.repo, o.tag);
+    const changes = gitLog(o.repo, prev, o.tag).map(classify);
+    const info = { tag: o.tag, prev, date: tagDate(o.repo, o.tag), changes };
+
+    const { zip, artifacts } = pack(o.tag, {
+      'RELEASE_NOTES.md': renderNotes(info),
+      'CHANGE_REPORT.md': renderReport(info),
+      'CHANGE_REPORT.html': renderHtml(info),
+    });
+    const zipSha = sha256(zip);
+
+    // 임시 파일에 쓰고 DB 기록이 끝난 뒤에만 최종 이름으로 바꾼다.
+    mkdirSync(o.out, { recursive: true });
+    const zipPath = resolve(join(o.out, `shipnote-${o.tag}.zip`));
+    const tmpPath = `${zipPath}.tmp`;
+    writeFileSync(tmpPath, zip);
+    try {
+      saveRelease(db, { tag: o.tag, prev, createdAt: info.date, zipPath, zipSha, changes, artifacts }, o.force);
+      renameSync(tmpPath, zipPath);
+    } catch (e) {
+      rmSync(tmpPath, { force: true });
+      throw e;
+    }
+
+    if (o.webhook) await notify(o.webhook, { tag: o.tag, prev, commits: changes.length, zipSha256: zipSha });
+    return { zipPath, zipSha, prev, commits: changes.length, artifacts };
   } finally {
     db.close();
   }
-
-  if (o.webhook) await notify(o.webhook, { tag: o.tag, prev, commits: changes.length, zipSha256: sha256(zip) });
-  return { zipPath, prev, commits: changes.length, artifacts };
 }

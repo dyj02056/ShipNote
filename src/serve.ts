@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { getRelease, listReleases, openDb } from './db.ts';
 import { sha256 } from './pack.ts';
 import { verifyZip } from './verify.ts';
@@ -14,6 +14,12 @@ const MIME: Record<string, string> = {
   '.json': 'application/json',
 };
 
+// 문자열 앞부분 비교는 web/dist-secret 같은 옆 폴더를 통과시키므로 relative로 판단한다.
+export function isInside(root: string, file: string): boolean {
+  const rel = relative(root, file);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
 // API 3개와 빌드된 웹 화면(web/dist)만 서빙한다.
 export function startServer(opts: { db: string; port: number; web: string; host?: string }): Promise<Server> {
   const db = openDb(opts.db);
@@ -25,7 +31,12 @@ export function startServer(opts: { db: string; port: number; web: string; host?
       res.end(JSON.stringify(body));
     };
     try {
-      const path = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
+      let path: string;
+      try {
+        path = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
+      } catch {
+        return json(400, { error: '주소 형식이 올바르지 않습니다' });
+      }
 
       if (path === '/api/releases') return json(200, listReleases(db));
 
@@ -57,8 +68,8 @@ export function startServer(opts: { db: string; port: number; web: string; host?
       if (path.startsWith('/api/')) return json(404, { error: '없는 주소입니다' });
 
       // 정적 파일. 웹 루트 밖으로 나가는 경로는 막는다.
-      let file = normalize(join(webRoot, path));
-      if (!file.startsWith(webRoot)) return json(403, { error: '허용되지 않는 경로입니다' });
+      let file = resolve(join(webRoot, path));
+      if (!isInside(webRoot, file)) return json(403, { error: '허용되지 않는 경로입니다' });
       if (!existsSync(file) || statSync(file).isDirectory()) file = join(webRoot, 'index.html');
       if (!existsSync(file)) return json(404, { error: '웹 화면이 빌드되지 않았습니다. npm run web:build' });
       res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });

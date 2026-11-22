@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Server } from 'node:http';
@@ -55,8 +56,14 @@ describe('릴리스 파이프라인(샘플 저장소 100건 이상)', () => {
     expect(verifyZip(readFileSync(p).subarray(0, 200)).ok).toBe(false);
   });
 
-  it('같은 태그는 --force 없이는 거부한다', async () => {
-    await expect(runRelease({ tag: 'v0.2.0', repo, out, db })).rejects.toThrow('이미 있는 릴리스');
+  it('같은 태그는 --force 없이는 거부하고 기존 zip을 건드리지 않는다', async () => {
+    const p = join(out, 'shipnote-v0.2.0.zip');
+    const before = createHash('sha256').update(readFileSync(p)).digest('hex');
+    await expect(runRelease({ tag: 'v0.2.0', repo, out, db, from: 'v0.1.0' })).rejects.toThrow('이미 있는 릴리스');
+    expect(createHash('sha256').update(readFileSync(p)).digest('hex')).toBe(before);
+    const d = openDb(db);
+    expect(getRelease(d, 'v0.2.0')!.release.zip_sha256).toBe(before);
+    d.close();
     await expect(runRelease({ tag: 'v0.2.0', repo, out, db, force: true })).resolves.toBeTruthy();
   }, 30_000);
 
@@ -70,9 +77,11 @@ describe('API 서버', () => {
   let server: Server;
   let base: string;
   beforeAll(async () => {
-    const web = join(tmp, 'web');
-    execFileSync('node', ['-e', `require('fs').mkdirSync(${JSON.stringify(web)},{recursive:true})`]);
+    const web = join(tmp, 'web', 'dist');
+    mkdirSync(web, { recursive: true });
     writeFileSync(join(web, 'index.html'), '<h1>ok</h1>');
+    mkdirSync(join(tmp, 'web', 'dist-secret'), { recursive: true });
+    writeFileSync(join(tmp, 'web', 'dist-secret', 'key.txt'), 'SECRET');
     server = await startServer({ db, port: 0, web });
     base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   });
@@ -100,5 +109,15 @@ describe('API 서버', () => {
   it('웹 루트 밖 경로를 막는다', async () => {
     const r = await fetch(`${base}/..%2f..%2fpackage.json`);
     expect(await r.text()).not.toContain('"name": "shipnote"');
+  });
+
+  it('이름이 비슷한 옆 폴더로 빠져나가지 못한다', async () => {
+    const r = await fetch(`${base}/..%2fdist-secret%2fkey.txt`);
+    expect(r.status).toBe(403);
+    expect(await r.text()).not.toContain('SECRET');
+  });
+
+  it('잘못된 URL 인코딩은 400이다', async () => {
+    expect((await fetch(`${base}/%E0%A4%A`)).status).toBe(400);
   });
 });

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { runRelease } from './release.ts';
 import { verifyZip } from './verify.ts';
 import { listReleases, openDb } from './db.ts';
@@ -24,7 +25,8 @@ const { values: v, positionals: p } = parseArgs({
     webhook: { type: 'string' },
     force: { type: 'boolean', default: false },
     port: { type: 'string', default: '4173' },
-    web: { type: 'string', default: 'web/dist' },
+    // src/cli.ts와 dist/cli.js 모두 패키지 루트 한 단계 아래에 있다. 설치본에서도 화면을 찾게 한다.
+    web: { type: 'string', default: fileURLToPath(new URL('../web/dist', import.meta.url)) },
     host: { type: 'string', default: '127.0.0.1' },
   },
 });
